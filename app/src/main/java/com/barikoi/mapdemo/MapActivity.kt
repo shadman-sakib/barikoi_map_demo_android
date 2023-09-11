@@ -10,11 +10,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.android.volley.Request
+import barikoi.barikoilocation.BarikoiAPI
+import barikoi.barikoilocation.NearbyPlace.NearbyPlaceAPI
+import barikoi.barikoilocation.NearbyPlace.NearbyPlaceListener
+import barikoi.barikoilocation.PlaceModels.NearbyPlace
 import com.android.volley.RequestQueue
-import com.android.volley.toolbox.StringRequest
 import com.android.volley.toolbox.Volley
-import com.google.gson.JsonIOException
 import com.mapbox.mapboxsdk.Mapbox
 import com.mapbox.mapboxsdk.annotations.Marker
 import com.mapbox.mapboxsdk.annotations.MarkerOptions
@@ -27,8 +28,7 @@ import com.mapbox.mapboxsdk.location.modes.CameraMode
 import com.mapbox.mapboxsdk.maps.MapView
 import com.mapbox.mapboxsdk.maps.MapboxMap
 import com.mapbox.mapboxsdk.maps.Style
-import org.json.JSONArray
-import org.json.JSONObject
+import java.util.ArrayList
 
 
 class MapActivity : AppCompatActivity() {
@@ -90,40 +90,35 @@ class MapActivity : AppCompatActivity() {
 
     //Function to get Nearby Banks/ATMs from Barikoi API and show it on map
     private fun getNearbybanks(map :MapboxMap?) {
+        BarikoiAPI.getINSTANCE(this,getString(R.string.barikoi_api_key))
+
         //check if current location is available in map, if so, call nearby API
         map?.locationComponent?.lastKnownLocation?.let {
-            val url ="https://barikoi.xyz/v2/api/search/nearby/category/$apiKey/2/20?longitude=${it.longitude}&latitude=${it.latitude}&ptype=Bank"
-            val stringRequest = StringRequest(
-                Request.Method.GET, url,
-                { response ->
-                    try {
-                        val places: JSONArray = JSONObject(response).getJSONArray("places")
-                        for (i in 0..places.length() - 1) {
-                            //add marker in map for every place in nearby list
+            val nearbyapi= NearbyPlaceAPI.builder(this).setLatLng(it.latitude,it.longitude)
+                .setDistance(1.0)
+                .setType("Bank")
+                .build()
+            nearbyapi.generateNearbyPlaceListByType ( object: NearbyPlaceListener {
+                override fun onPlaceListReceived(places: ArrayList<NearbyPlace>?) {
+                    if (places != null) {
+                        for( p in places){
                             map.addMarker(
                                 MarkerOptions()
                                     .setPosition(
                                         LatLng(
-                                            places.getJSONObject(i).getString("latitude")
-                                                .toDouble(),
-                                            places.getJSONObject(i).getString("longitude")
-                                                .toDouble()
+                                            p.latitude,p.longitude
                                         )
                                     )
-                                    .setTitle(places.getJSONObject(i).getString("name"))
-                            )
+                                    .setTitle(p.address))
                         }
-                    }catch (e :JsonIOException){
-                        Toast.makeText(this, e.toString(), Toast.LENGTH_LONG).show()
                     }
+                }
+                override fun onFailure(message: String?) {
+                    TODO("Not yet implemented")
+                }
 
-                },
-                { error-> Toast.makeText(this, error.toString(), Toast.LENGTH_LONG).show() })
+            } )
 
-
-// Add the request to the RequestQueue.
-            queue?.add(stringRequest)
-//
         }
 
 
