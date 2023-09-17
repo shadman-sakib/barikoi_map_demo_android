@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">Barikoi Map Demo</string>
-    <string name="barikoi_api_key">API_KEY_HERE</string>
+    <string name="barikoi_api_key">BARIKOI_API_KEY_HERE</string>
+    <string-array name="examples">
+
+
+    </string-array>
 </resources>

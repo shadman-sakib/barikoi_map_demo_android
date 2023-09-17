@@ -1,28 +1,20 @@
 package com.barikoi.mapdemo
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import barikoi.barikoilocation.BarikoiAPI
-import barikoi.barikoilocation.NearbyPlace.NearbyPlaceAPI
-import barikoi.barikoilocation.NearbyPlace.NearbyPlaceListener
-import barikoi.barikoilocation.PlaceModels.NearbyPlace
-import com.android.volley.RequestQueue
-import com.android.volley.toolbox.Volley
-import com.mapbox.geojson.Feature
-import com.mapbox.geojson.Geometry
 import com.mapbox.mapboxsdk.Mapbox
-import com.mapbox.mapboxsdk.annotations.Marker
-import com.mapbox.mapboxsdk.annotations.MarkerOptions
-import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.annotations.Polyline
+import com.mapbox.mapboxsdk.annotations.PolylineOptions
+import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
 import com.mapbox.mapboxsdk.geometry.LatLng
+import com.mapbox.mapboxsdk.geometry.LatLngBounds
 import com.mapbox.mapboxsdk.location.LocationComponentActivationOptions
 import com.mapbox.mapboxsdk.location.LocationComponentOptions
 import com.mapbox.mapboxsdk.location.engine.LocationEngineRequest
@@ -30,105 +22,59 @@ import com.mapbox.mapboxsdk.location.modes.CameraMode
 import com.mapbox.mapboxsdk.maps.MapView
 import com.mapbox.mapboxsdk.maps.MapboxMap
 import com.mapbox.mapboxsdk.maps.Style
-import java.util.ArrayList
 
+class LocationMapActivity : AppCompatActivity() {
 
-class MapActivity : AppCompatActivity() {
-    var  queue: RequestQueue? =null
-    //Barikoi API key, to get a new key visit https://developer.barikoi.com/
-    var apiKey: String? = null
-
-    var map: MapboxMap? = null
+    private lateinit   var map: MapboxMap
     private lateinit var mapView: MapView
-
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Mapbox.getInstance(this)
-        setContentView(R.layout.activity_map)
-
-        queue = Volley.newRequestQueue(this)
+        setContentView(R.layout.activity_location_map)
 
         //map style name for style link
-        val styleId = "osm-bright"
+        val styleId = "osm-liberty"
 
         // get the api key from barikoi developer panel https://developer.barikoi.com
-        apiKey = getString(R.string.barikoi_api_key)
+        val apiKey = getString(R.string.barikoi_api_key)
 
         // Build the style URL
         val styleUrl = "https://map.barikoi.com/styles/$styleId/style.json?key=$apiKey"
 
-        //check location permission, if not granted then request permission
-        if (!checkLocationPermission())requestLocationPermission()
-
+        //Line points array
+        val linepoints = ArrayList<LatLng>()
+        // Add line points
+        linepoints.add(LatLng(23.87397849117633,90.4004025152986,))
+        linepoints.add(LatLng(23.860512893207584,90.4004025152986))
+        linepoints.add(LatLng(23.837857327354314,90.41815482211757))
+        linepoints.add(LatLng(23.82212196615106,90.42035665862238))
+        linepoints.add(LatLng(23.812428033815493,90.40370527005587))
+        linepoints.add(LatLng(23.762436156214207,90.39462262442248))
 
         // Create map view
         mapView= findViewById(R.id.mapView)
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync { map ->
             this.map =map
-            //omit the default attributions
 
             // Set the style after mapView was loaded
-            map.setStyle(styleUrl) {
-                map.uiSettings.isAttributionEnabled=false
-                map.uiSettings.isLogoEnabled=false
-                map.cameraPosition=CameraPosition.Builder().target(LatLng(23.80,90.360)).zoom(14.0).build()
-                setMapcurrentLocationLayer()
+            map.setStyle(styleUrl){style->
+                //check if location permissions are allowed
+                if(checkLocationPermission()){
+                    //if location permission allowed, set current location layer on map
+                    setMapcurrentLocationLayer()
+                }else{
+                    //location permission denied, request permission
+                    requestLocationPermission()
+                }
+
+
             }
 
-            //call route activity on marker click
-            map.setOnMarkerClickListener (object: MapboxMap.OnMarkerClickListener{
-                override fun onMarkerClick(marker: Marker): Boolean {
-                    val i = Intent(this@MapActivity, RouteActivity::class.java)
-                    i.putExtra("startlat", map.locationComponent.lastKnownLocation?.latitude)
-                    i.putExtra("startlon", map.locationComponent.lastKnownLocation?.longitude)
-                    i.putExtra("endlat", marker.position.latitude)
-                    i.putExtra("endlon",marker.position.longitude)
-                    startActivity(i)
-                    return true
-                }
 
-            })
+
         }
     }
-
-    //Function to get Nearby Banks/ATMs from Barikoi API and show it on map
-    private fun getNearbybanks(map :MapboxMap?) {
-        BarikoiAPI.getINSTANCE(this,getString(R.string.barikoi_api_key))
-
-        //check if current location is available in map, if so, call nearby API
-        map?.locationComponent?.lastKnownLocation?.let {
-            val nearbyapi= NearbyPlaceAPI.builder(this).setLatLng(it.latitude,it.longitude)
-                .setDistance(1.0)
-                .setType("Bank")
-                .build()
-            nearbyapi.generateNearbyPlaceListByType ( object: NearbyPlaceListener {
-                override fun onPlaceListReceived(places: ArrayList<NearbyPlace>?) {
-                    if (places != null) {
-                        for( p in places){
-                            map.addMarker(
-                                MarkerOptions()
-                                    .setPosition(
-                                        LatLng(
-                                            p.latitude,p.longitude
-                                        )
-                                    )
-                                    .setTitle(p.address))
-                        }
-                    }
-                }
-                override fun onFailure(message: String?) {
-                    TODO("Not yet implemented")
-                }
-
-            } )
-
-        }
-
-
-    }
-
     //Function to set current location icon layer in map
     private fun setMapcurrentLocationLayer(){
 
@@ -150,13 +96,15 @@ class MapActivity : AppCompatActivity() {
             // for ActivityCompat#requestPermissions for more details.
             return
         }
-        map?.let {
+        map.let {
             val locationComponent = it.locationComponent
             val locationComponentOptions =
-                LocationComponentOptions.builder(this@MapActivity)
-                    .pulseEnabled(true)
+                LocationComponentOptions.builder(this@LocationMapActivity)
+                    .pulseEnabled(true)     // adds pulse effect on current location point
                     .bearingTintColor(Color.RED)
+                    .compassAnimationEnabled(true)
                     .build()
+
             it.style?.let {
                 val locationComponentActivationOptions =
                     buildLocationComponentActivationOptions(it, locationComponentOptions)
@@ -164,8 +112,6 @@ class MapActivity : AppCompatActivity() {
                 locationComponent.isLocationComponentEnabled = true
                 locationComponent.cameraMode = CameraMode.TRACKING_GPS
 
-                //after current location is obtained, get nearby bank/ATM in map
-                getNearbybanks(map)
             }
         }
 
@@ -191,10 +137,10 @@ class MapActivity : AppCompatActivity() {
 
     private fun checkLocationPermission(): Boolean{
 
-            return ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
 
     }
 
@@ -213,7 +159,7 @@ class MapActivity : AppCompatActivity() {
                     setMapcurrentLocationLayer()
                 } else -> {
                 // No location access granted.
-                    Toast.makeText(this, "Location permission denied, cannot get nearby places", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Location permission denied, cannot get nearby places", Toast.LENGTH_LONG).show()
             }
             }
         }
@@ -257,4 +203,6 @@ class MapActivity : AppCompatActivity() {
         super.onDestroy()
         mapView.onDestroy()
     }
+
+
 }
